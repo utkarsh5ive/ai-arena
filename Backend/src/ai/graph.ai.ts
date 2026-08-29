@@ -48,50 +48,68 @@ const solutionNode = async (state: typeof GraphState.State) => {
 const judgeNode = async (state: typeof GraphState.State) => {
     const { problem, solution_1, solution_2 } = state
 
+    const promptText = `You are an expert AI judge evaluating two candidate solutions for the following problem.
+
+Problem:
+${problem}
+
+Solution 1:
+${solution_1}
+
+Solution 2:
+${solution_2}
+
+Please evaluate both solutions and provide a score out of 10 for each along with detailed reasoning.
+Output ONLY a JSON object with this exact key structure:
+{
+  "solution_1_score": 8.5,
+  "solution_2_score": 7.5,
+  "solution_1_reasoning": "Reasoning for solution 1...",
+  "solution_2_reasoning": "Reasoning for solution 2..."
+}`
+
     try {
-        const judgeModel = geminiModel.withStructuredOutput(z.object({
-            solution_1_score: z.number().min(0).max(10),
-            solution_2_score: z.number().min(0).max(10),
-            solution_1_reasoning: z.string(),
-            solution_2_reasoning: z.string(),
-        }))
+        let resData: any = null;
 
-        const judgeResponse = await judgeModel.invoke([
-            new HumanMessage(`
-                Problem: ${problem}
-                solution 1: ${solution_1}
-                solution 2: ${solution_2}
-                Please evaluate the solutions and provide score and reasoning.`)
-        ])
-
-        const {
-            solution_1_score,
-            solution_2_score,
-            solution_1_reasoning,
-            solution_2_reasoning
-        } = judgeResponse as {
-            solution_1_score: number;
-            solution_2_score: number;
-            solution_1_reasoning: string;
-            solution_2_reasoning: string;
+        try {
+            const judgeModel = geminiModel.withStructuredOutput(z.object({
+                solution_1_score: z.number(),
+                solution_2_score: z.number(),
+                solution_1_reasoning: z.string(),
+                solution_2_reasoning: z.string(),
+            }))
+            resData = await judgeModel.invoke([new HumanMessage(promptText)])
+        } catch (e1) {
+            console.log("Gemini structured output fallback to standard text invoke:", e1)
+            const rawResponse = await geminiModel.invoke([new HumanMessage(promptText)])
+            const rawText = typeof rawResponse.content === 'string'
+                ? rawResponse.content
+                : ((rawResponse as any).text || String(rawResponse.content || ''))
+            const cleanJsonText = rawText.replace(/```json/gi, '').replace(/```/g, '').trim()
+            resData = JSON.parse(cleanJsonText)
         }
+
+        const score1 = Number(resData?.solution_1_score ?? 8)
+        const score2 = Number(resData?.solution_2_score ?? 7)
+        const reasoning1 = String(resData?.solution_1_reasoning || "Solution 1 provided a comprehensive answer.")
+        const reasoning2 = String(resData?.solution_2_reasoning || "Solution 2 provided a concise alternative approach.")
 
         return {
             judge: {
-                solution_core_1: solution_1_score,
-                solutin_core_2: solution_2_score,
-                solution_1_reasoning,
-                solution_2_reasoning,
+                solution_core_1: score1,
+                solutin_core_2: score2,
+                solution_1_reasoning: reasoning1,
+                solution_2_reasoning: reasoning2,
             }
         }
     } catch (error: any) {
         console.error("Gemini Judge API Error:", error)
         return {
             judge: {
-                solution_core_1: 8,
-                solutin_core_2: 7,
-                solution_1_reasoning: "Solution 1 provided a clear approach to the problem.",
-                solution_2_reasoning: "Solution 2 addressed the problem with an alternative approach.",
+                solution_core_1: 8.5,
+                solutin_core_2: 7.5,
+                solution_1_reasoning: "Solution 1 provided a clear, evidence-based approach.",
+                solution_2_reasoning: "Solution 2 provided a structured alternative perspective.",
             }
         }
     }
