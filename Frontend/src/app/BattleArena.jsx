@@ -35,15 +35,17 @@ function ScoreCard({ label, score, reasoning, scoreColor }) {
 /* ── Main BattleArena ── */
 export default function BattleArena({ data }) {
   if (!data) return null;
-  const { solution_1, solution_2, judge } = data;
-  const sol1Wins = judge.solution_core_1 >= judge.solutin_core_2;
+  const { solution_1, solution_2, judge = {} } = data;
+  const score1 = judge.solution_core_1 ?? 0;
+  const score2 = judge.solution_core_2 ?? judge.solutin_core_2 ?? 0;
+  const sol1Wins = score1 >= score2;
 
   return (
     <div className="flex-1 flex flex-col min-h-0 px-5 pb-4 pt-3 gap-4 overflow-hidden">
       {/* Solutions — flex-1 fills remaining space, cards scroll internally */}
       <div className="grid grid-cols-2 gap-4 flex-1 min-h-0">
-        <SolutionCard number={1} content={solution_1} dotColor="bg-teal-400" />
-        <SolutionCard number={2} content={solution_2} dotColor="bg-purple-400" />
+        <SolutionCard number={1} content={solution_1 || ''} dotColor="bg-teal-400" />
+        <SolutionCard number={2} content={solution_2 || ''} dotColor="bg-purple-400" />
       </div>
 
       {/* Judge section — fixed height, always visible */}
@@ -60,14 +62,14 @@ export default function BattleArena({ data }) {
         <div className="flex gap-4">
           <ScoreCard
             label="Solution 1 Score"
-            score={judge.solution_core_1}
-            reasoning={judge.solution_1_reasoning}
+            score={score1}
+            reasoning={judge.solution_1_reasoning || 'No reasoning provided'}
             scoreColor="text-teal-400"
           />
           <ScoreCard
             label="Solution 2 Score"
-            score={judge.solutin_core_2}
-            reasoning={judge.solution_2_reasoning}
+            score={score2}
+            reasoning={judge.solution_2_reasoning || 'No reasoning provided'}
             scoreColor="text-purple-400"
           />
         </div>

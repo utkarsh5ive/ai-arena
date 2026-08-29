@@ -1,22 +1,17 @@
 import { useState, useRef } from 'react';
+import axios from 'axios';
 import BattleArena from './BattleArena';
 
-/* ── Mock API — swap with real fetch() ── */
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
+
+/* ── Call Backend API ── */
 async function callBattleAPI(question) {
-  await new Promise((r) => setTimeout(r, 1800));
-  return {
-    problem: question,
-    solution_1: `### Overview\nHere is a structured answer to: **"${question}"**\n\nThis solution takes a practical, evidence-based approach.\n\n### Key Points\n- Start simple and build up gradually\n- Validate each step before moving on\n- Prefer clarity over cleverness\n\n### Explanation\nThe core idea is to break the problem into smaller parts. Address each independently. Use \`proven tools\` where available.\n\n### Summary\nFocus on **correctness** first, then optimize.`,
+  const response = await axios.post(`${API_BASE_URL}/invoke`, {
+    input: question,
+  });
 
-    solution_2: `### Approach\nA different take on **"${question}"**.\n\n### Steps\n- Identify the root cause before acting\n- Evaluate multiple options with clear criteria\n- Implement incrementally\n\n### Trade-offs\n- Speed vs. maintainability\n- Simplicity vs. flexibility\n\n### Recommendation\nDeliver a minimal working version first, then iterate based on real-world feedback.`,
-
-    judge: {
-      solution_core_1: 9.1,
-      solutin_core_2: 8.4,
-      solution_1_reasoning: 'Solution 1 is thorough and well-structured with concrete examples and clear reasoning.',
-      solution_2_reasoning: 'Solution 2 is concise and practical but lacks depth compared to Solution 1.',
-    },
-  };
+  const payload = response.data;
+  return payload.result || payload;
 }
 
 /* ── History item ── */
@@ -39,6 +34,7 @@ export default function App() {
   const [activeIndex, setActiveIndex] = useState(null);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState(null);
   const inputRef = useRef(null);
 
   const activeEntry = activeIndex !== null ? history[activeIndex] : null;
@@ -46,17 +42,30 @@ export default function App() {
   async function handleSubmit() {
     const question = input.trim();
     if (!question || loading) return;
+
     setInput('');
+    setErrorMessage(null);
     setLoading(true);
-    const nextIndex = history.length;
-    setActiveIndex(nextIndex);
+
     try {
       const data = await callBattleAPI(question);
-      const winner = data.judge.solution_core_1 >= data.judge.solutin_core_2 ? 1 : 2;
-      setHistory((h) => [...h, { question, data, winner }]);
-      setActiveIndex(nextIndex);
-    } catch {
-      setActiveIndex(history.length > 0 ? history.length - 1 : null);
+      const score1 = data?.judge?.solution_core_1 ?? 0;
+      const score2 = data?.judge?.solution_core_2 ?? data?.judge?.solutin_core_2 ?? 0;
+      const winner = score1 >= score2 ? 1 : 2;
+
+      setHistory((h) => {
+        const next = [...h, { question, data, winner }];
+        setActiveIndex(next.length - 1);
+        return next;
+      });
+    } catch (error) {
+      console.error('Failed to call API:', error);
+      const apiErr =
+        error.response?.data?.error ||
+        error.response?.data?.message ||
+        error.message ||
+        'Failed to connect to backend server.';
+      setErrorMessage(apiErr);
     } finally {
       setLoading(false);
     }
@@ -70,7 +79,7 @@ export default function App() {
         <p className="text-xs font-semibold text-white/30 uppercase tracking-widest px-2 mb-3">History</p>
 
         <button
-          onClick={() => { setActiveIndex(null); inputRef.current?.focus(); }}
+          onClick={() => { setActiveIndex(null); setErrorMessage(null); inputRef.current?.focus(); }}
           className="flex items-center gap-2 text-sm text-white/50 hover:text-white px-2 py-1.5 rounded-lg hover:bg-white/5 transition-colors mb-4"
         >
           <span className="material-symbols-outlined text-base">add</span>
@@ -85,7 +94,7 @@ export default function App() {
                   key={i}
                   item={entry}
                   isActive={i === activeIndex && !loading}
-                  onClick={() => setActiveIndex(i)}
+                  onClick={() => { setErrorMessage(null); setActiveIndex(i); }}
                 />
               ))
           }
@@ -99,6 +108,19 @@ export default function App() {
         <div className="text-center py-4 border-b border-white/8 shrink-0">
           <h1 className="text-base font-semibold text-white/80">AI Chat Arena</h1>
         </div>
+
+        {/* Error Alert */}
+        {errorMessage && (
+          <div className="mx-5 mt-4 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-300 text-sm flex items-center justify-between shrink-0">
+            <span>{errorMessage}</span>
+            <button
+              onClick={() => setErrorMessage(null)}
+              className="text-red-300/60 hover:text-red-300 text-xs px-2 py-1"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
 
         {/* Content */}
         {loading ? (
