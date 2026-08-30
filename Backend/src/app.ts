@@ -1,46 +1,29 @@
 import express from 'express'
 import cors from 'cors'
-import runGraph from './ai/graph.ai.js'
+import { connectDB } from './db/db.js'
+import authRoutes from './routes/auth.routes.js'
+import chatRoutes from './routes/chat.routes.js'
 
 const app = express()
 
-app.use(cors())
+// CORS — allow Vite dev server and direct access
+const corsOptions = {
+    origin: true, // reflect origin (allows any origin in dev)
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true
+}
+
+app.use(cors(corsOptions))
 app.use(express.json())
 
-app.get('/', async (req, res) => {
-    try {
-        const result = await runGraph("What should we eat during diarrhea?")
-        res.json(result)
-    } catch (error) {
-        console.error("Error running graph:", error)
-        res.status(500).json({ error: error instanceof Error ? error.message : String(error) })
-    }
+// Connect to MongoDB
+connectDB().catch((err) => {
+    console.error('Failed to connect to MongoDB:', err.message)
 })
 
-app.post('/invoke', async (req, res) => {
-    try {
-        const { input } = req.body
-        if (!input) {
-            return res.status(400).json({
-                success: false,
-                message: "Input is required."
-            })
-        }
-        const result = await runGraph(input)
-
-        res.status(200).json({
-            message: "Graph executed successfully.",
-            success: true,
-            result
-        })
-    } catch (error) {
-        console.error("Error running graph:", error)
-        res.status(500).json({
-            success: false,
-            message: "Failed to execute graph.",
-            error: error instanceof Error ? error.message : String(error)
-        })
-    }
-})
+// Routes
+app.use('/auth', authRoutes)
+app.use('/chat', chatRoutes)
 
 export default app

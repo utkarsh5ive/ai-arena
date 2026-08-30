@@ -8,7 +8,7 @@ function SolutionCard({ number, content, dotColor }) {
       <div className="flex items-center gap-2 mb-3 shrink-0">
         <span className={`w-2 h-2 rounded-full ${dotColor}`} />
         <span className="text-[11px] font-semibold tracking-widest text-white/40 uppercase">
-          Solution {number}
+          AI Model Response {number}
         </span>
       </div>
       {/* Scrollable content */}
