@@ -1,5 +1,5 @@
 import { StateGraph, StateSchema, START, END } from '@langchain/langgraph'
-import { mistralAIModel, cohereModel, geminiModel } from "./model.ai.js"
+import { mistralAIModel, cohereModel, geminiModel, geminiJudgeModel } from "./model.ai.js"
 import z from 'zod'
 import { HumanMessage } from '@langchain/core/messages'
 
@@ -48,51 +48,71 @@ const solutionNode = async (state: typeof GraphState.State) => {
 const judgeNode = async (state: typeof GraphState.State) => {
     const { problem, solution_1, solution_2 } = state
 
-    const promptText = `You are an expert AI judge evaluating two candidate solutions for the following problem.
+    const promptText = `You are a strict, impartial AI evaluator. Your job is to score two AI-generated responses to the same question on a 1–10 scale. You MUST give different scores when the responses differ in quality — do NOT default to similar scores out of politeness.
 
-Problem:
-${problem}
+QUESTION: ${problem}
 
-Solution 1:
+RESPONSE A:
 ${solution_1}
 
-Solution 2:
+RESPONSE B:
 ${solution_2}
 
-Please evaluate both solutions and provide a score out of 10 for each along with detailed reasoning.
-Output ONLY a JSON object with this exact key structure:
+EVALUATION CRITERIA (score each response independently):
+1. Accuracy — Is the information factually correct?
+2. Completeness — Does it fully answer the question?
+3. Clarity — Is it well-structured and easy to understand?
+4. Depth — Does it go beyond surface-level facts?
+5. Practicality — Is the advice/answer actionable and useful?
+
+SCORING RULES:
+- Score range: 1.0 to 10.0 (decimals allowed, e.g. 6.5)
+- Be critical and honest. If one response is clearly better, the score gap should be at least 1.5 points.
+- If both responses are equally strong, scores may be close, but justify it.
+- Do NOT inflate scores. A generic or incomplete answer should score 4–6.
+- A truly excellent answer scores 8–10. A poor or wrong answer scores 1–4.
+
+Output ONLY valid JSON with this exact structure (no markdown, no explanation outside the JSON):
 {
-  "solution_1_score": 8.5,
-  "solution_2_score": 7.5,
-  "solution_1_reasoning": "Reasoning for solution 1...",
-  "solution_2_reasoning": "Reasoning for solution 2..."
+  "solution_1_score": <number>,
+  "solution_2_score": <number>,
+  "solution_1_reasoning": "<one concise sentence explaining the score for Response A>",
+  "solution_2_reasoning": "<one concise sentence explaining the score for Response B>"
 }`
 
     try {
-        let resData: any = null;
+        // Use direct text invoke (not withStructuredOutput — that forces temp=0)
+        const rawResponse = await geminiJudgeModel.invoke([new HumanMessage(promptText)])
+        const rawText = typeof rawResponse.content === 'string'
+            ? rawResponse.content
+            : ((rawResponse as any).text || String(rawResponse.content || ''))
 
-        try {
-            const judgeModel = geminiModel.withStructuredOutput(z.object({
-                solution_1_score: z.number(),
-                solution_2_score: z.number(),
-                solution_1_reasoning: z.string(),
-                solution_2_reasoning: z.string(),
-            }))
-            resData = await judgeModel.invoke([new HumanMessage(promptText)])
-        } catch (e1) {
-            console.log("Gemini structured output fallback to standard text invoke:", e1)
-            const rawResponse = await geminiModel.invoke([new HumanMessage(promptText)])
-            const rawText = typeof rawResponse.content === 'string'
-                ? rawResponse.content
-                : ((rawResponse as any).text || String(rawResponse.content || ''))
-            const cleanJsonText = rawText.replace(/```json/gi, '').replace(/```/g, '').trim()
-            resData = JSON.parse(cleanJsonText)
+        // Strip markdown code fences if present
+        const cleanJson = rawText
+            .replace(/```json/gi, '')
+            .replace(/```/g, '')
+            .trim()
+
+        // Extract JSON object even if there's surrounding text
+        const jsonMatch = cleanJson.match(/\{[\s\S]*\}/)
+        if (!jsonMatch) throw new Error('No JSON object found in judge response')
+
+        const resData = JSON.parse(jsonMatch[0]) as {
+            solution_1_score?: number
+            solution_2_score?: number
+            solution_1_reasoning?: string
+            solution_2_reasoning?: string
         }
 
-        const score1 = Number(resData?.solution_1_score ?? 8)
-        const score2 = Number(resData?.solution_2_score ?? 7)
-        const reasoning1 = String(resData?.solution_1_reasoning || "Solution 1 provided a comprehensive answer.")
-        const reasoning2 = String(resData?.solution_2_reasoning || "Solution 2 provided a concise alternative approach.")
+        const score1 = Math.min(10, Math.max(1, Number(resData.solution_1_score)))
+        const score2 = Math.min(10, Math.max(1, Number(resData.solution_2_score)))
+
+        if (isNaN(score1) || isNaN(score2)) throw new Error('Judge returned non-numeric scores')
+
+        const reasoning1 = String(resData.solution_1_reasoning || 'No reasoning provided.')
+        const reasoning2 = String(resData.solution_2_reasoning || 'No reasoning provided.')
+
+        console.log(`Judge scores — A: ${score1}, B: ${score2}`)
 
         return {
             judge: {
@@ -103,17 +123,12 @@ Output ONLY a JSON object with this exact key structure:
             }
         }
     } catch (error: any) {
-        console.error("Gemini Judge API Error:", error)
-        return {
-            judge: {
-                solution_core_1: 8.5,
-                solutin_core_2: 7.5,
-                solution_1_reasoning: "Solution 1 provided a clear, evidence-based approach.",
-                solution_2_reasoning: "Solution 2 provided a structured alternative perspective.",
-            }
-        }
+        console.error('Gemini Judge Error:', error?.message || error)
+        // Re-throw so the graph fails loudly rather than returning fake scores
+        throw new Error(`Judge failed: ${error?.message || String(error)}`)
     }
 }
+
 
 const graph = new StateGraph({ state: GraphState })
     .addNode("solution", solutionNode)

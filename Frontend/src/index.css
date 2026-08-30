@@ -1,10 +1,62 @@
 @import "tailwindcss";
 
+/* ── Theme CSS variables ── */
+:root,
+[data-theme="dark"] {
+  --bg-base:        #111111;
+  --bg-surface:     #1c1c1c;
+  --bg-card:        #141414;
+  --bg-hover:       rgba(255,255,255,0.05);
+  --bg-active:      rgba(255,255,255,0.10);
+  --border:         rgba(255,255,255,0.07);
+  --border-input:   rgba(255,255,255,0.09);
+  --border-focus:   rgba(255,255,255,0.25);
+  --border-hr:      rgba(255,255,255,0.10);
+  --text-primary:   #ffffff;
+  --text-secondary: rgba(255,255,255,0.55);
+  --text-muted:     rgba(255,255,255,0.40);
+  --text-faint:     rgba(255,255,255,0.20);
+  --text-label:     rgba(255,255,255,0.40);
+  --text-body:      rgba(255,255,255,0.70);
+  --text-caption:   rgba(255,255,255,0.50);
+  --scrollbar:      #2a2a2a;
+  --glow:           rgba(255,255,255,0.025);
+  --input-bg:       rgba(255,255,255,0.04);
+  --code-bg:        #2a2a2a;
+  --code-text:      #a5b4fc;
+}
+
+[data-theme="light"] {
+  --bg-base:        #f4f4f5;
+  --bg-surface:     #ffffff;
+  --bg-card:        #ffffff;
+  --bg-hover:       rgba(0,0,0,0.04);
+  --bg-active:      rgba(0,0,0,0.08);
+  --border:         rgba(0,0,0,0.08);
+  --border-input:   rgba(0,0,0,0.12);
+  --border-focus:   rgba(0,0,0,0.30);
+  --border-hr:      rgba(0,0,0,0.08);
+  --text-primary:   #0f0f0f;
+  --text-secondary: rgba(0,0,0,0.60);
+  --text-muted:     rgba(0,0,0,0.40);
+  --text-faint:     rgba(0,0,0,0.25);
+  --text-label:     rgba(0,0,0,0.45);
+  --text-body:      rgba(0,0,0,0.72);
+  --text-caption:   rgba(0,0,0,0.50);
+  --scrollbar:      #d1d1d1;
+  --glow:           rgba(0,0,0,0.04);
+  --input-bg:       rgba(0,0,0,0.03);
+  --code-bg:        #e8e8ec;
+  --code-text:      #5b21b6;
+}
+
 body {
   font-family: 'Inter', system-ui, sans-serif;
-  background-color: #111111;
+  background-color: var(--bg-base);
+  color: var(--text-primary);
   height: 100dvh;
   overflow: hidden;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 .font-mono {
@@ -24,4 +76,12 @@ body {
 /* Custom scrollbar */
 .scroll::-webkit-scrollbar { width: 4px; }
 .scroll::-webkit-scrollbar-track { background: transparent; }
-.scroll::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 99px; }
+.scroll::-webkit-scrollbar-thumb { background: var(--scrollbar); border-radius: 99px; }
+
+/* Themed utility classes */
+.theme-bg-base     { background-color: var(--bg-base); }
+.theme-bg-surface  { background-color: var(--bg-surface); }
+.theme-bg-card     { background-color: var(--bg-card); }
+.theme-border      { border-color: var(--border); }
+.theme-text        { color: var(--text-primary); }
+.theme-text-muted  { color: var(--text-muted); }
